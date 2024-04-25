@@ -17,48 +17,58 @@ function ElevarPrivilegios{
 	exit
     }
 
-    Write-Host "`t`t Executando com privilÈgios elevados"
+    Write-Host "`t`t Executando com privil√©gios elevados"
 }
 
+function Add-ComputerToDomain {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $NewComputerName,
+        
+        [Parameter(Mandatory = $true)]
+        [string] $Domain,
+        
+        [Parameter(Mandatory = $true)]
+        [PSCredential] $Credential
+    )
 
-function Dominio{
-
-   Clear-Host
-   Write-Host "`n`t`t TI`n"
-   $hostname = Read-Host "`t"'Nome da M·quina ( ' $env:computername ' )'
-   $dominio = Read-Host "`t"'DomÌnio'
-   $usuario = Read-Host "`t"'Usu·rio'
-   $password = Read-Host "`t"'Senha' -AsSecureString
-   
-   $Cred = New-Object System.Management.Automation.PSCredential("$dominio\$usuario", $password)
-   Write-Host "`t""Adicionando m·quina $hostname ao domÌnio $dominio"
-   ElevarPrivilegios
-   
-   Try {
-    # Tenta adicionar a m·quina ao AD
-    if ($hostname -match $env:computername -or [string]::IsNullOrWhiteSpace($hostname)) {
-        Add-Computer -Domain $dominio -Credential $Cred -ErrorAction Stop
-    } else {
-        Add-Computer -Domain $dominio -NewName $hostname -Credential $Cred -ErrorAction Stop
+    try {       
+        # Adiciona o computador ao dom√≠nio
+        if ($NewComputerName -match $env:computername) {
+            Add-Computer -DomainName $Domain -Credential $Credential -ErrorAction Stop
+        } 
+        else {
+            Add-Computer -DomainName $Domain -NewName $NewComputerName -Credential $Credential -ErrorAction Stop
+        }
+        Write-Host "Computador '$NewComputerName' adicionado com sucesso ao dom√≠nio '$Domain'."
     }
-    Write-Host "M·quina adicionada ao Active Directory com sucesso."
-    } Catch [System.Management.Automation.RuntimeException] {
-    # Erro genÈrico para problemas de runtime
-    Write-Host "Erro: Ocorreu um problema ao adicionar a m·quina ao AD."
-    } Catch [System.DirectoryServices.ActiveDirectory.ActiveDirectoryObjectExistsException] {
-    # Erro especÌfico se a m·quina j· existe no AD
-    Write-Host "Erro: A m·quina j· existe no Active Directory."
-    } Catch [System.Management.Automation.PSArgumentException] {
-    # Erro especÌfico para argumentos inv·lidos, como credenciais erradas
-    Write-Host "Erro: As credenciais fornecidas est„o incorretas."
-    } Catch [System.Net.NetworkInformation.NetworkInformationException] {
-    # Erro especÌfico se a rede est· offline
-    Write-Host "Erro: N„o foi possÌvel conectar ao Active Directory. Verifique sua conex„o de rede."
-    } Catch {
-    # Captura qualquer outra exceÁ„o n„o especificada anteriormente
-    Write-Host "Ocorreu um erro inesperado: $($_.Exception.Message)"
+    catch [System.UnauthorizedAccessException] {
+        Write-Error "Acesso negado. Verifique se voc√™ tem as permiss√µes necess√°rias para adicionar computadores ao dom√≠nio e renomear computadores."
     }
-
+    Catch [System.Management.Automation.PSArgumentException] {
+        Write-Error "Erro: As credenciais fornecidas est√£o incorretas."
+    } 
+    Catch [System.Net.NetworkInformation.NetworkInformationException] {
+        Write-Error "Erro: N√£o foi poss√≠vel conectar ao Active Directory. Verifique sua conex√£o de rede."
+    }
+    Catch [System.DirectoryServices.ActiveDirectory.ActiveDirectoryObjectExistsException] {
+        Write-Error "Erro: A m√°quina j√° existe no Active Directory."
+    }
+    catch {
+        Write-Error "Um erro inesperado ocorreu: $_"
+    }
 }
 
-Dominio
+Clear-Host
+Write-Host "`n`t`t TI`n"
+$hostname = Read-Host "`t"'Nome da M√°quina ( ' $env:computername ' )'
+$dominio = Read-Host "`t"'Dom√≠nio'
+$usuario = Read-Host "`t"'Usu√°rio'
+$password = Read-Host "`t"'Senha' -AsSecureString
+  
+$cred = New-Object System.Management.Automation.PSCredential("$dominio\$usuario", $password)
+ElevarPrivilegios
+if ([string]::IsNullOrWhiteSpace($hostname)) {
+    $hostname = $env:computername 
+}
+Add-ComputerToDomain -NewComputerName $hostname -Domain $dominio -Credential $cred
